@@ -1,10 +1,12 @@
 package app
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"os"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func keyMsg(value string) tea.KeyMsg {
@@ -85,6 +87,57 @@ func TestTUIShowsPromptOutputWhileBusy(t *testing.T) {
 	}
 }
 
+func TestTUIBlocksNewResearchWhileBusy(t *testing.T) {
+	skipProfileOnboardingForTest(t)
+	model := newTUIModel("0.1.27")
+	model.busy = true
+	model.query = "first question"
+	model.input.SetValue("second question")
+
+	next, cmd := model.Update(keyMsg("enter"))
+	if cmd != nil {
+		t.Fatal("busy TUI should not start another research command")
+	}
+	updated := next.(tuiModel)
+	if updated.query != "first question" || updated.input.Value() != "second question" {
+		t.Fatalf("busy submission changed active work: query=%q input=%q", updated.query, updated.input.Value())
+	}
+}
+
+func TestTUIIgnoresStaleRunResult(t *testing.T) {
+	skipProfileOnboardingForTest(t)
+	model := newTUIModel("0.1.27")
+	model.busy = true
+	model.query = "current question"
+	model.report = "current progress"
+
+	next, cmd := model.Update(runResultMsg{query: "old question", output: "stale report", completed: true})
+	if cmd != nil {
+		t.Fatal("stale result should not schedule a command")
+	}
+	updated := next.(tuiModel)
+	if !updated.busy || updated.query != "current question" || updated.report != "current progress" {
+		t.Fatalf("stale result changed current state: %#v", updated)
+	}
+}
+
+func TestTUIStreamingHoldsSplitOSCSequence(t *testing.T) {
+	model := newTUIModel("0.1.27")
+	model.busy = true
+	model.query = "NVDA"
+
+	next, _ := model.Update(promptOutputMsg{query: "NVDA", chunk: "before\x1b]52;c;payload"})
+	updated := next.(tuiModel)
+	if got := stripANSI(updated.view.View()); strings.Contains(got, "payload") {
+		t.Fatalf("incomplete OSC payload leaked into TUI: %q", got)
+	}
+	next, _ = updated.Update(promptOutputMsg{query: "NVDA", chunk: "\x07after"})
+	updated = next.(tuiModel)
+	if got := stripANSI(updated.view.View()); !strings.Contains(got, "beforeafter") || strings.Contains(got, "payload") {
+		t.Fatalf("unexpected sanitized stream: %q", got)
+	}
+}
+
 func TestOnboardingContentReflectsSetupState(t *testing.T) {
 	text := englishText()
 	if got := onboardingContent(text, 80, setupReady); got != "" {
@@ -95,6 +148,37 @@ func TestOnboardingContentReflectsSetupState(t *testing.T) {
 	}
 	if got := onboardingContent(text, 80, setupProviderMissing); !strings.Contains(stripANSI(got), "no AI provider") {
 		t.Fatalf("unexpected provider onboarding: %q", got)
+	}
+}
+
+func TestTUIMalformedConfigShowsRecoverableError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	configDir := dir + "/gacha"
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configDir+"/config.json", []byte("{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	model := newTUIModel("0.1.27")
+	if model.profile != nil {
+		t.Fatal("malformed config should not trap the user in profile onboarding")
+	}
+	got := stripANSI(model.view.View())
+	if !strings.Contains(got, "could not load config") {
+		t.Fatalf("config recovery error was not visible:\n%s", got)
+	}
+	if _, cmd := model.handleSubmit("/quit"); cmd == nil {
+		t.Fatal("typed quit should remain available after a config error")
+	}
+}
+
+func TestFallbackPromptOutputSanitizesDiagnosticsAndKeepsPrompt(t *testing.T) {
+	got := fallbackPromptOutput("\x1b]52;c;payload\x07runtime failed", "full research prompt")
+	if strings.Contains(got, "payload") || !strings.Contains(got, "runtime failed") || !strings.Contains(got, "full research prompt") {
+		t.Fatalf("unexpected fallback output: %q", got)
 	}
 }
 
@@ -555,6 +639,7 @@ func TestReportActionsExposeNextChoices(t *testing.T) {
 func TestCompletedReportDoesNotAppendActionChoices(t *testing.T) {
 	skipProfileOnboardingForTest(t)
 	model := newTUIModel("0.1.27")
+	model.query = "Should I buy NVDA now?"
 	next, cmd := model.Update(runResultMsg{
 		query:     "Should I buy NVDA now?",
 		output:    "## Easy Basic Report\n\n### 1. Bottom Line\nRead this first.",

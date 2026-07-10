@@ -20,7 +20,7 @@ Gacha를 설치하고, `gch`를 실행하고, 최초 1회 투자 프로필을 �
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dkstm95/gacha/main/install.sh | sh
-gch
+"$HOME/.local/bin/gch"
 ```
 
 Gacha는 자동 매매 도구가 아니라 리서치 도구입니다.
@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/dkstm95/gacha/main/install.sh | sh
 실행:
 
 ```bash
-gch
+"$HOME/.local/bin/gch"
 ```
 
 설치하면 두 명령어를 사용할 수 있습니다.
@@ -91,8 +91,10 @@ Gacha를 쓰기 위해 개발 도구를 따로 설치할 필요는 없습니다.
 AI 설정을 물어볼 수도 있습니다.
 안내에 따라 사용할 AI 계정을 연결하면 됩니다.
 
-설치 중 추가 명령을 실행하라는 안내가 나오면 한 번 실행하세요.
-그 뒤 새 터미널을 여세요.
+설치 프로그램이 `$HOME/.local/bin`이 `PATH`에 없다고 안내하면, 같은
+터미널에서 `gch`를 쓰기 전에 출력된 `export PATH=...` 명령을 실행하세요.
+새 터미널에서도 짧은 명령어를 계속 쓰려면 그 줄을 셸 프로필(zsh는
+`~/.zprofile`, bash는 `~/.bash_profile`)에 추가한 뒤 새 터미널을 여세요.
 
 ### Windows
 

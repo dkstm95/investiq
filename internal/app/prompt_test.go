@@ -1,6 +1,7 @@
 package app
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,21 @@ func TestBuildPromptIncludesWorkflowAndRequirements(t *testing.T) {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prompt did not contain %q", expected)
 		}
+	}
+}
+
+func TestBuildPromptRejectsMalformedResearchProfileConfig(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	configDir := dir + "/gacha"
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configDir+"/config.json", []byte("{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buildPrompt([]string{"Should I buy NVDA?"}); err == nil || !strings.Contains(err.Error(), "could not load research profile config") {
+		t.Fatalf("expected malformed config error, got %v", err)
 	}
 }
 

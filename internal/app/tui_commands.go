@@ -2,8 +2,9 @@ package app
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
 	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func (m tuiModel) handleSubmit(value string) (tea.Model, tea.Cmd) {
@@ -13,9 +14,10 @@ func (m tuiModel) handleSubmit(value string) (tea.Model, tea.Cmd) {
 	if isSettingsCommand(value) {
 		return m.showSettingsChoice()
 	}
-	switch value {
-	case "/q", "/quit", "quit", "exit":
+	if isQuitCommand(value) {
 		return m, tea.Quit
+	}
+	switch value {
 	case "/h", "/help", "help":
 		m.status = m.text.Help
 		m.mode = m.text.Command
@@ -61,6 +63,15 @@ func (m tuiModel) handleSubmit(value string) (tea.Model, tea.Cmd) {
 	m.mode = m.text.Auto
 	m.view.SetContent(researchingContent(value, m.text))
 	return m, tea.Batch(m.spin.Tick, researchPhaseTick(), runPromptCmd(value))
+}
+
+func isQuitCommand(value string) bool {
+	switch strings.TrimSpace(value) {
+	case "/q", "/quit", "quit", "exit":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m tuiModel) showProfileEditor() (tea.Model, tea.Cmd) {
@@ -234,7 +245,10 @@ func (m tuiModel) showSettingsError(message string) (tea.Model, tea.Cmd) {
 }
 
 func (m tuiModel) showError(err error) (tea.Model, tea.Cmd) {
+	m.profile = nil
+	m.choice = nil
 	m.status = m.text.Fallback
+	m.mode = m.text.System
 	m.view.SetContent(errorContent(err, "", m.text))
 	m.view.GotoTop()
 	return m, nil

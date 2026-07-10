@@ -15,9 +15,13 @@ ln -sf gacha gch
 ## Release
 
 ```bash
-VERSION=0.2.3 sh scripts/build-release.sh
-gh release create v0.2.3 dist/*.tar.gz dist/*.zip dist/checksums.txt --title "v0.2.3"
+git tag v0.2.6
+git push origin v0.2.6
 ```
+
+The tag workflow runs all checks, builds and verifies the artifacts, and only
+then creates the GitHub release. Do not publish a release manually before the
+workflow succeeds.
 
 The release workflow lives in:
 

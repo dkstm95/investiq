@@ -44,3 +44,20 @@ func TestRunOpenCodeWithProgressStreamsOutput(t *testing.T) {
 		t.Fatal("expected progress chunks")
 	}
 }
+
+func TestTerminalSanitizingWriterHoldsSplitOSCSequence(t *testing.T) {
+	var output strings.Builder
+	writer := &terminalSanitizingWriter{destination: &output}
+	if _, err := writer.Write([]byte("before\x1b]52;c;payload")); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "before" {
+		t.Fatalf("incomplete OSC sequence leaked to terminal: %q", got)
+	}
+	if _, err := writer.Write([]byte("-continued\x07after")); err != nil {
+		t.Fatal(err)
+	}
+	if got := output.String(); got != "beforeafter" {
+		t.Fatalf("OSC sequence was not removed: %q", got)
+	}
+}

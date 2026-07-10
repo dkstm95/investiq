@@ -1,13 +1,15 @@
 package app
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"strings"
-	"time"
 )
 
 type runResultMsg struct {
@@ -61,9 +63,15 @@ func newTUIModel(version string) tuiModel {
 	spin.Style = accentStyle
 
 	view := viewport.New(80, 16)
-	config, _ := loadGachaConfig()
+	config, configErr := loadGachaConfig()
 	profile := (*profileFlow)(nil)
-	if shouldShowProfileOnboarding(config.Profile) {
+	status := text.Ready
+	mode := text.Auto
+	if configErr != nil {
+		status = text.Fallback
+		mode = text.System
+		view.SetContent(errorContent(fmt.Errorf("could not load config %s: %w", gachaConfigPath(), configErr), "", text))
+	} else if shouldShowProfileOnboarding(config.Profile) {
 		profile = newProfileOnboarding(config.Profile)
 		view.SetContent(profile.render(lang, 80))
 	} else {
@@ -79,9 +87,9 @@ func newTUIModel(version string) tuiModel {
 		spin:    spin,
 		width:   100,
 		height:  34,
-		status:  text.Ready,
+		status:  status,
 		runtime: routeLabelFor(lang),
-		mode:    text.Auto,
+		mode:    mode,
 		profile: profile,
 	}
 }
@@ -144,6 +152,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if value == "" {
 				return m, nil
 			}
+			if m.busy && !isQuitCommand(value) {
+				return m, nil
+			}
 			m.input.SetValue("")
 			if m.choice != nil {
 				m.choice = nil
@@ -154,6 +165,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleSubmit(value)
 		}
 	case runResultMsg:
+		if msg.query != m.query {
+			return m, nil
+		}
 		m.busy = false
 		m.phase = 0
 		m.runtime = routeLabelFor(m.lang)
@@ -179,10 +193,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.view.GotoTop()
 	case promptOutputMsg:
 		if m.busy && msg.query == m.query {
-			m.report += displayPromptChunk(msg.chunk)
-			if strings.TrimSpace(m.report) != "" {
+			m.report += msg.chunk
+			clean := displayPromptChunk(m.report)
+			if strings.TrimSpace(clean) != "" {
 				m.mode = m.text.Report
-				m.view.SetContent(strings.TrimSpace(m.report))
+				m.view.SetContent(strings.TrimSpace(clean))
 				m.view.GotoBottom()
 			}
 		}

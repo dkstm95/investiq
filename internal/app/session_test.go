@@ -26,6 +26,25 @@ func TestLineSessionShowsHelpForUnknownSlashCommand(t *testing.T) {
 	}
 }
 
+func TestLineSessionAcceptsDocumentedNavigationCommands(t *testing.T) {
+	for _, command := range []string{"/help", "/home", "/theme"} {
+		t.Run(command, func(t *testing.T) {
+			app := New("test")
+			app.env.Stdin = strings.NewReader(command + "\n/quit\n")
+			var stdout bytes.Buffer
+			app.env.Stdout = &stdout
+			app.env.Stderr = &bytes.Buffer{}
+
+			if err := app.startLineSession(); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(stdout.String(), "Unknown command: "+command) {
+				t.Fatalf("documented command was rejected:\n%s", stdout.String())
+			}
+		})
+	}
+}
+
 func TestLineSessionShowsProfile(t *testing.T) {
 	output := runLineSessionWithInput(t, "/profile\n/quit\n")
 	if !strings.Contains(output, "Research Profile") {

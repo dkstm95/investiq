@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -38,7 +38,7 @@ func (a *App) updateSelf() error {
 	}
 	current := normalizeVersion(a.version)
 	target := normalizeVersion(latest)
-	if current == target {
+	if comparison, ok := compareReleaseVersions(current, target); (ok && comparison >= 0) || current == target {
 		fmt.Printf("gacha is already up to date (%s).\n", a.version)
 		return nil
 	}
@@ -80,16 +80,9 @@ func (a *App) updateSelf() error {
 		return fmt.Errorf("could not prepare update binary: %w", err)
 	}
 
-	backup := exe + ".old"
-	_ = os.Remove(backup)
-	if err := os.Rename(exe, backup); err != nil {
+	if err := replaceExecutable(newBinary, exe); err != nil {
 		return fmt.Errorf("could not replace %s: %w\nTry installing manually from https://github.com/dkstm95/gacha/releases/latest", exe, err)
 	}
-	if err := copyFile(newBinary, exe, 0o755); err != nil {
-		_ = os.Rename(backup, exe)
-		return fmt.Errorf("could not install updated binary: %w\nThe previous binary was restored when possible.", err)
-	}
-	_ = os.Remove(backup)
 
 	fmt.Printf("Updated %s to %s.\n", exe, target)
 	return nil
@@ -124,6 +117,44 @@ func (a *App) latestReleaseTag() (string, error) {
 
 func normalizeVersion(value string) string {
 	return strings.TrimPrefix(strings.TrimSpace(value), "v")
+}
+
+func compareReleaseVersions(current string, target string) (int, bool) {
+	currentParts, ok := numericVersionParts(current)
+	if !ok {
+		return 0, false
+	}
+	targetParts, ok := numericVersionParts(target)
+	if !ok {
+		return 0, false
+	}
+	for index := range currentParts {
+		if currentParts[index] > targetParts[index] {
+			return 1, true
+		}
+		if currentParts[index] < targetParts[index] {
+			return -1, true
+		}
+	}
+	return 0, true
+}
+
+func numericVersionParts(value string) ([3]int, bool) {
+	var result [3]int
+	value = strings.SplitN(normalizeVersion(value), "+", 2)[0]
+	value = strings.SplitN(value, "-", 2)[0]
+	parts := strings.Split(value, ".")
+	if len(parts) == 0 || len(parts) > len(result) {
+		return result, false
+	}
+	for index, part := range parts {
+		number, err := strconv.Atoi(part)
+		if err != nil || number < 0 {
+			return result, false
+		}
+		result[index] = number
+	}
+	return result, true
 }
 
 func releaseAssetURL(tag string) string {
@@ -272,26 +303,36 @@ func extractTarGz(archivePath string, destinationDir string) error {
 	}
 }
 
-func copyFile(source string, destination string, mode fs.FileMode) error {
+func replaceExecutable(source string, destination string) error {
 	in, err := os.Open(source)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(destination, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	staged, err := os.CreateTemp(filepath.Dir(destination), ".gacha-update-*")
 	if err != nil {
 		return err
 	}
-	_, copyErr := io.Copy(out, in)
-	closeErr := out.Close()
-	if copyErr != nil {
-		return copyErr
+	stagedPath := staged.Name()
+	defer os.Remove(stagedPath)
+
+	if _, err := io.Copy(staged, in); err != nil {
+		_ = staged.Close()
+		return err
 	}
-	if closeErr != nil {
-		return closeErr
+	if err := staged.Chmod(0o755); err != nil {
+		_ = staged.Close()
+		return err
 	}
-	return os.Chmod(destination, mode)
+	if err := staged.Sync(); err != nil {
+		_ = staged.Close()
+		return err
+	}
+	if err := staged.Close(); err != nil {
+		return err
+	}
+	return os.Rename(stagedPath, destination)
 }
 
 func targetTriple() string {

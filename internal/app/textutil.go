@@ -1,8 +1,10 @@
 package app
 
 import (
-	"github.com/charmbracelet/lipgloss"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func settingValue(value string) string {
@@ -86,20 +88,5 @@ func min(a, b int) int {
 }
 
 func stripANSI(value string) string {
-	var builder strings.Builder
-	inEscape := false
-	for _, r := range value {
-		if inEscape {
-			if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') {
-				inEscape = false
-			}
-			continue
-		}
-		if r == '\x1b' {
-			inEscape = true
-			continue
-		}
-		builder.WriteRune(r)
-	}
-	return builder.String()
+	return ansi.Strip(value)
 }

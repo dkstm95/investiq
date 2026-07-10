@@ -35,6 +35,35 @@ func TestSaveReportWritesMarkdownUnderDataHome(t *testing.T) {
 	}
 }
 
+func TestSaveReportDoesNotOverwriteSameSecondAndQuery(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	now := time.Date(2026, 5, 30, 12, 34, 56, 0, time.UTC)
+
+	first, err := saveReportAt("NVDA", "first report", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := saveReportAt("NVDA", "second report", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatalf("report paths collided: %s", first)
+	}
+	firstData, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondData, err := os.ReadFile(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(firstData), "first report") || !strings.Contains(string(secondData), "second report") {
+		t.Fatalf("saved reports were not preserved: first=%q second=%q", firstData, secondData)
+	}
+}
+
 func TestReportFileNameUsesReadableSlug(t *testing.T) {
 	got := reportFileName(time.Date(2026, 5, 30, 12, 34, 56, 0, time.UTC), "NVDA 지금 사도 될까?")
 	if got != "20260530-123456-nvda-지금-사도-될까.md" {

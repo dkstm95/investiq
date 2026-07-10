@@ -37,6 +37,23 @@ func TestReleaseChecksumsURL(t *testing.T) {
 	}
 }
 
+func TestCompareReleaseVersionsPreventsDowngrade(t *testing.T) {
+	for _, testCase := range []struct {
+		current string
+		target  string
+		want    int
+	}{
+		{current: "0.3.0", target: "v0.2.5", want: 1},
+		{current: "v0.2.5", target: "0.2.5", want: 0},
+		{current: "0.2.5", target: "0.2.6", want: -1},
+	} {
+		got, ok := compareReleaseVersions(testCase.current, testCase.target)
+		if !ok || got != testCase.want {
+			t.Fatalf("compareReleaseVersions(%q, %q) = %d, %v; want %d, true", testCase.current, testCase.target, got, ok, testCase.want)
+		}
+	}
+}
+
 func TestLatestReleaseTagUsesConfiguredEndpoint(t *testing.T) {
 	oldURL := gitHubLatestReleaseURL
 	gitHubLatestReleaseURL = "https://example.test/latest"
@@ -182,6 +199,39 @@ func TestExtractTarGzIgnoresTraversalEntry(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "gacha")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected traversal output: %v", err)
+	}
+}
+
+func TestReplaceExecutablePreservesOldFileUntilStagedCopySucceeds(t *testing.T) {
+	dir := t.TempDir()
+	destination := filepath.Join(dir, "gacha")
+	if err := os.WriteFile(destination, []byte("old binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceExecutable(filepath.Join(dir, "missing"), destination); err == nil {
+		t.Fatal("expected staging failure")
+	}
+	data, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "old binary" {
+		t.Fatalf("failed update changed existing executable: %q", data)
+	}
+
+	source := filepath.Join(dir, "new-gacha")
+	if err := os.WriteFile(source, []byte("new binary"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := replaceExecutable(source, destination); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "new binary" {
+		t.Fatalf("updated executable has unexpected content: %q", data)
 	}
 }
 

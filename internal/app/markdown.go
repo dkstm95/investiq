@@ -7,6 +7,7 @@ import (
 )
 
 func renderMarkdownReport(markdown string) string {
+	markdown = stripANSI(markdown)
 	lines := strings.Split(strings.TrimSpace(markdown), "\n")
 	rendered := make([]string, 0, len(lines))
 	inCodeBlock := false

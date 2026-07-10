@@ -36,7 +36,8 @@ func runAgent(prompt string, dryRun bool) (string, bool, error) {
 		return "", false, nil
 	}
 	output, err := runOpenCodeWithResolution(commandPath, prompt, resolution, true)
-	return strings.TrimSpace(output), err == nil && strings.TrimSpace(output) != "", err
+	output = strings.TrimSpace(stripANSI(output))
+	return output, err == nil && output != "", err
 }
 
 func hasCommand(command string) bool {
@@ -174,14 +175,23 @@ func runOpenCodeWithProgress(commandPath string, args []string, stream bool, onO
 		wg.Add(2)
 		go copyOutput(stdout)
 		go copyOutput(stderr)
-		err = cmd.Wait()
 		wg.Wait()
+		err = cmd.Wait()
 		return out.String(), err
 	}
 	if stream {
 		var out bytes.Buffer
-		cmd.Stdout = io.MultiWriter(os.Stdout, &out)
-		cmd.Stderr = io.MultiWriter(os.Stderr, &out)
+		var outMu sync.Mutex
+		cmd.Stdout = captureStreamWriter{
+			buffer:   &out,
+			lock:     &outMu,
+			terminal: &terminalSanitizingWriter{destination: os.Stdout},
+		}
+		cmd.Stderr = captureStreamWriter{
+			buffer:   &out,
+			lock:     &outMu,
+			terminal: &terminalSanitizingWriter{destination: os.Stderr},
+		}
 		err := cmd.Run()
 		return out.String(), err
 	}
@@ -198,10 +208,45 @@ type progressWriter struct {
 	onOutput func(string)
 }
 
+type captureStreamWriter struct {
+	buffer   *bytes.Buffer
+	lock     *sync.Mutex
+	terminal *terminalSanitizingWriter
+}
+
+func (w captureStreamWriter) Write(p []byte) (int, error) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	w.buffer.Write(p)
+	if _, err := w.terminal.Write(p); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
+type terminalSanitizingWriter struct {
+	destination io.Writer
+	raw         strings.Builder
+	emitted     int
+}
+
+func (w *terminalSanitizingWriter) Write(p []byte) (int, error) {
+	w.raw.Write(p)
+	clean := stripANSI(w.raw.String())
+	if w.emitted > len(clean) {
+		w.emitted = 0
+	}
+	if _, err := io.WriteString(w.destination, clean[w.emitted:]); err != nil {
+		return 0, err
+	}
+	w.emitted = len(clean)
+	return len(p), nil
+}
+
 func (w progressWriter) Write(p []byte) (int, error) {
 	w.lock.Lock()
+	defer w.lock.Unlock()
 	w.buffer.Write(p)
-	w.lock.Unlock()
 	if len(p) > 0 {
 		w.onOutput(string(p))
 	}

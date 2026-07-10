@@ -20,7 +20,7 @@ investment question.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/dkstm95/gacha/main/install.sh | sh
-gch
+"$HOME/.local/bin/gch"
 ```
 
 Gacha is for research, not trading automation.
@@ -75,7 +75,7 @@ curl -fsSL https://raw.githubusercontent.com/dkstm95/gacha/main/install.sh | sh
 Run:
 
 ```bash
-gch
+"$HOME/.local/bin/gch"
 ```
 
 The installer adds two commands:
@@ -91,8 +91,10 @@ You can skip it, or change it later with `/profile`.
 Gacha may also ask to set up AI.
 Follow the prompts and connect the account you want to use.
 
-If the installer asks you to run one more command, run it once.
-Then open a new terminal.
+If the installer says `$HOME/.local/bin` is not on `PATH`, run the printed
+`export PATH=...` command before using `gch` in that same terminal. Add that
+line to your shell profile (`~/.zprofile` for zsh or `~/.bash_profile` for
+bash) before opening a new terminal if you want the short command to persist.
 
 ### Windows
 

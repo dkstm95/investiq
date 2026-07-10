@@ -72,6 +72,12 @@ func (a *App) startLineSession() error {
 				fmt.Fprintln(a.env.Stdout, "Goodbye.")
 			}
 			return nil
+		case "/h", "/help", "help":
+			fmt.Fprintln(a.env.Stdout, helpContent(text))
+		case "/home", "home":
+			fmt.Fprintln(a.env.Stdout, "gacha")
+		case "/theme", "theme", "/themes", "themes":
+			fmt.Fprintln(a.env.Stdout, settingsContent(text))
 		case "/profile", "profile":
 			if err := printProfileTo(a.env.Stdout); err != nil {
 				fmt.Fprintln(a.env.Stderr, err)
@@ -91,7 +97,11 @@ func (a *App) startLineSession() error {
 }
 
 func isInteractiveTerminal() bool {
-	info, err := os.Stdin.Stat()
+	return isTerminalFile(os.Stdin) && isTerminalFile(os.Stdout)
+}
+
+func isTerminalFile(file *os.File) bool {
+	info, err := file.Stat()
 	if err != nil {
 		return false
 	}

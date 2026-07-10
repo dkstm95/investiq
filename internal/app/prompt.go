@@ -117,7 +117,10 @@ Classify the user's request into discover, select, entry, exit, portfolio, or jo
 		query = "(No additional user request supplied.)"
 	}
 	lang := responseLanguage(query)
-	config, _ := loadGachaConfig()
+	config, err := loadGachaConfig()
+	if err != nil {
+		return "", fmt.Errorf("could not load research profile config: %w", err)
+	}
 	sections := []string{
 		strings.TrimSpace(system),
 		strings.TrimSpace(workflow),

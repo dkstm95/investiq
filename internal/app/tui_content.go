@@ -21,9 +21,9 @@ func runPromptWithProgress(query string, onOutput func(string)) promptRunResult 
 	}
 	output, err := runOpenCodeWithResolutionProgress(commandPath, prompt, resolveOpenCodeModel(), false, onOutput)
 	if err != nil {
-		return promptRunResult{output: output, err: err}
+		return promptRunResult{output: fallbackPromptOutput(output, prompt), err: err}
 	}
-	report := strings.TrimSpace(output)
+	report := strings.TrimSpace(stripANSI(output))
 	return promptRunResult{output: report, completed: report != ""}
 }
 
@@ -42,13 +42,22 @@ func runDetailedPromptWithProgress(query string, basicReport string, onOutput fu
 	}
 	output, err := runOpenCodeWithResolutionProgress(commandPath, prompt, resolveOpenCodeModel(), false, onOutput)
 	if err != nil {
-		return promptRunResult{output: output, err: err}
+		return promptRunResult{output: fallbackPromptOutput(output, prompt), err: err}
 	}
-	report := strings.TrimSpace(output)
+	report := strings.TrimSpace(stripANSI(output))
 	if report == "" {
 		return promptRunResult{}
 	}
 	return promptRunResult{output: strings.TrimSpace(basicReport) + "\n\n" + report, completed: true}
+}
+
+func fallbackPromptOutput(diagnostics string, prompt string) string {
+	parts := make([]string, 0, 2)
+	if diagnostics = strings.TrimSpace(stripANSI(diagnostics)); diagnostics != "" {
+		parts = append(parts, diagnostics)
+	}
+	parts = append(parts, "Copy/paste fallback prompt:\n\n"+strings.TrimSpace(prompt))
+	return strings.Join(parts, "\n\n")
 }
 
 func welcomeContent(version string, text uiText, width int, _ int) string {

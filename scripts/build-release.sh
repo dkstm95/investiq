@@ -44,6 +44,14 @@ if command -v shasum >/dev/null 2>&1; then
   (cd "$OUT_DIR" && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -type f -print | sed 's#^\./##' | sort | xargs shasum -a 256 > checksums.txt)
 elif command -v sha256sum >/dev/null 2>&1; then
   (cd "$OUT_DIR" && find . -maxdepth 1 \( -name '*.tar.gz' -o -name '*.zip' \) -type f -print | sed 's#^\./##' | sort | xargs sha256sum > checksums.txt)
+else
+  echo "scripts/build-release.sh requires shasum or sha256sum" >&2
+  exit 1
 fi
+
+test -s "$OUT_DIR/checksums.txt" || {
+  echo "scripts/build-release.sh did not produce checksums.txt" >&2
+  exit 1
+}
 
 echo "Release artifacts written to $OUT_DIR"

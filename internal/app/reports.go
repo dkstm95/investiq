@@ -32,10 +32,28 @@ func saveReportAt(query string, report string, now time.Time) (string, error) {
 	}
 	path := filepath.Join(dir, reportFileName(now, query))
 	content := reportFileContent(query, report)
-	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		return "", err
+	for suffix := 1; suffix <= 9999; suffix++ {
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if os.IsExist(err) {
+			path = filepath.Join(dir, reportFileNameWithSuffix(now, query, suffix+1))
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		_, writeErr := file.WriteString(content)
+		closeErr := file.Close()
+		if writeErr != nil {
+			_ = os.Remove(path)
+			return "", writeErr
+		}
+		if closeErr != nil {
+			_ = os.Remove(path)
+			return "", closeErr
+		}
+		return path, nil
 	}
-	return path, nil
+	return "", fmt.Errorf("could not allocate a unique report filename")
 }
 
 type reportAction int
@@ -113,6 +131,11 @@ func reportFileName(now time.Time, query string) string {
 		slug = "report"
 	}
 	return stamp + "-" + slug + ".md"
+}
+
+func reportFileNameWithSuffix(now time.Time, query string, suffix int) string {
+	name := strings.TrimSuffix(reportFileName(now, query), ".md")
+	return fmt.Sprintf("%s-%d.md", name, suffix)
 }
 
 func reportFileContent(query string, report string) string {
